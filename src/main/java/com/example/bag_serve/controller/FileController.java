@@ -2,6 +2,7 @@ package com.example.bag_serve.controller;
 
 import com.alibaba.fastjson.JSONObject;
 import com.example.bag_serve.entity.Scatter;
+import com.example.bag_serve.util.OrderUtil;
 import com.example.bag_serve.util.ScatterUtil;
 import lombok.SneakyThrows;
 import org.springframework.web.bind.annotation.CrossOrigin;
@@ -11,6 +12,8 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.io.*;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 
 /**
  * @program: bag_serve
@@ -31,6 +34,37 @@ public class FileController {
     @PostMapping("/get/scatter/data")
     public Object getScatterData(@RequestBody Scatter scatter){
         JSONObject jsonObject = new JSONObject();
+
+//        传的数据不满足要求，返回失败
+        if(!scatter.getFileName().equals("idkp1-10.txt")){
+            if(scatter.getGroup()==11){
+                jsonObject.put("status",202);
+                return jsonObject;
+            }
+        }
+//        将创建好的数据传递给前端
+        ArrayList<ScatterUtil> scatterUtils = new ArrayList<>();
+//        将数据分割成【重量，价值】的数组
+        splitDataTwoGroup(scatter, scatterUtils);
+
+//        返回结果
+        if(scatterUtils.size()>0){
+            jsonObject.put("status",200);
+            jsonObject.put("data",scatterUtils);
+            return jsonObject;
+        }
+        jsonObject.put("status",201);
+        jsonObject.put("data",null);
+        return jsonObject;
+
+    }
+
+    /**
+     * 将数据分割成【重量，价值】的数组
+     * @param scatter
+     * @param scatterUtils
+     */
+    private void splitDataTwoGroup(@RequestBody Scatter scatter, ArrayList<ScatterUtil> scatterUtils) {
 //        定义存放价值项集和重量项集的数组(此时数据已被分割)
         ArrayList<Integer> profitsList = new ArrayList<>();
         ArrayList<Integer> weightsList = new ArrayList<>();
@@ -38,21 +72,52 @@ public class FileController {
         String fileName=scatter.getFileName();
         Integer group = scatter.getGroup();
         readFile(fileName,group,profitsList,weightsList);
-//        将创建好的数据传递给前端
-        ArrayList<ScatterUtil> scatterUtils = new ArrayList<>();
+
         for (int i = 0; i < profitsList.size(); i++) {
             ScatterUtil scatterUtil = new ScatterUtil();
             scatterUtil.setWeight(weightsList.get(i));
             scatterUtil.setProfit(profitsList.get(i));
-
             scatterUtils.add(scatterUtil);
         }
-        jsonObject.put("status",200);
-        jsonObject.put("data",scatterUtils);
+    }
+
+
+    @PostMapping("/order")
+    public Object order(@RequestBody Scatter scatter){
+        JSONObject jsonObject = new JSONObject();
+//      传的数据不满足要求，返回失败
+        if(!scatter.getFileName().equals("idkp1-10.txt")){
+            if(scatter.getGroup()==11){
+                jsonObject.put("status",202);
+                return jsonObject;
+            }
+        }
+        ArrayList<ScatterUtil> scatterUtils = new ArrayList<>();
+//      将数据分割成【重量，价值】的数组
+        splitDataTwoGroup(scatter, scatterUtils);
+//        返回前端的数据列表
+        ArrayList<OrderUtil> orderUtils = new ArrayList<>();
+        for (int i = 0; i < scatterUtils.size(); i=i+3) {
+//            封装数据
+            OrderUtil orderUtil = new OrderUtil();
+            List<ScatterUtil> item = scatterUtils.subList(i, i + 3);
+            orderUtil.setItem(item);
+            float rate = (float) item.get(2).getProfit() / item.get(2).getWeight();
+            orderUtil.setRate(rate);
+            orderUtils.add(orderUtil);
+        }
+        Collections.sort(orderUtils);
+//        返回结果
+        if (orderUtils.size()>0) {
+            jsonObject.put("status",200);
+            jsonObject.put("data",orderUtils);
+            return jsonObject;
+        }
+        jsonObject.put("status",201);
+        jsonObject.put("data",null);
         return jsonObject;
 
     }
-
 
 //    抛异常的注解
 
