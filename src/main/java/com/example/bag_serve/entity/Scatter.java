@@ -20,4 +20,6 @@ public class Scatter {
     private String fileName;
 
     private Integer group;
+
+    private Integer type;
 }
