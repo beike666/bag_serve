@@ -3,17 +3,25 @@ package com.example.bag_serve.controller;
 import com.alibaba.fastjson.JSONObject;
 
 import com.example.bag_serve.entity.Scatter;
+import com.example.bag_serve.util.AnswerUtil;
 import com.example.bag_serve.util.OrderUtil;
 import com.example.bag_serve.util.ScatterUtil;
 import lombok.SneakyThrows;
+import org.apache.poi.hssf.usermodel.HSSFWorkbook;
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.ss.usermodel.Workbook;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
+
 import java.io.*;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Date;
 import java.util.List;
 
 /**
@@ -143,6 +151,85 @@ public class FileController {
         }
     }
 
+    @PostMapping("/get/answer/save")
+    public Object answerAndSave(@RequestBody Scatter scatter){
+        JSONObject jsonObject = new JSONObject();
+//        定义存放价值项集和重量项集的数组(此时数据已被分割)
+        ArrayList<Integer> profitsList = new ArrayList<>();
+        ArrayList<Integer> weightsList = new ArrayList<>();
+//        获取前端的请求数据
+        String dataFileName=scatter.getFileName();
+        Integer group = scatter.getGroup();
+        String suffix=scatter.getFileType();
+
+//        读取文件
+        readFile(dataFileName,group,profitsList,weightsList);
+//        获取当前组的容量
+        int volume=volumeCount(scatter.getFileName(),scatter.getGroup());
+        long startTime=0;
+        int answer=0;
+        long endTime=0;
+        //文件路径
+        String filePath=System.getProperty("user.dir")+System.getProperty("file.separator")
+                +"file";
+        File file = new File(filePath);
+        if (!file.exists()) {
+            file.mkdirs();
+        }
+//        用时间给文件起名
+        Date dd=new Date();
+        //时间格式化
+        SimpleDateFormat sim=new SimpleDateFormat("yyyy-MM-dd");
+        String saveFileName =sim.format(dd)+"-"+System.currentTimeMillis();
+        File file1 = new File(filePath +System.getProperty("file.separator")+ saveFileName+suffix);
+//        运行时间
+        double runTime=0;
+        String downUrl="http://localhost:8088/file/"+saveFileName+suffix;
+        if(scatter.getType()==0){
+//            采用动态规划算法
+            startTime=System.currentTimeMillis();   //获取开始时间
+            answer=dp(profitsList,weightsList,volume);
+            endTime=System.currentTimeMillis(); //获取结束时间
+            runTime=(endTime-startTime)/1000.0;
+            if(suffix.equals(".txt")){
+                String data="最优解："+answer+"\n"+
+                        "求最优解的时间："+runTime+"\n";
+                writeTxt(file1,data);
+            }else if(suffix.equals(".xlsx")){
+                AnswerUtil answerUtil = new AnswerUtil();
+                answerUtil.setAnswer(answer);
+                answerUtil.setRunTime(runTime);
+                writeExcel(file1,answerUtil);
+            }
+            jsonObject.put("status",200);
+            jsonObject.put("answer",answer);
+            jsonObject.put("runtime",runTime);
+            jsonObject.put("downUrl",downUrl);
+            return jsonObject;
+        }else{
+//            采用回溯算法
+            startTime=System.currentTimeMillis();   //获取开始时间
+            answer=back(profitsList,weightsList,volume);
+            endTime=System.currentTimeMillis(); //获取结束时间
+            runTime=(endTime-startTime)/1000.0;
+            if(suffix.equals(".txt")){
+                String data="最优解："+answer+"\n"+
+                        "求最优解的时间："+runTime+"\n";
+                writeTxt(file1,data);
+            }else if(suffix.equals(".xlsx")){
+                AnswerUtil answerUtil = new AnswerUtil();
+                answerUtil.setAnswer(answer);
+                answerUtil.setRunTime(runTime);
+                writeExcel(file1,answerUtil);
+            }
+            jsonObject.put("status",200);
+            jsonObject.put("answer",answer);
+            jsonObject.put("runtime",runTime);
+            jsonObject.put("downUrl",downUrl);
+            return jsonObject;
+        }
+    }
+
     /**
      * 动态规划算法
      * @param profitsList
@@ -184,6 +271,13 @@ public class FileController {
 
     }
 
+    /**
+     * 回溯处理数据
+     * @param profitsList
+     * @param weightsList
+     * @param volume
+     * @return
+     */
     private int back(ArrayList<Integer> profitsList, ArrayList<Integer> weightsList, int volume){
         //        组数
         int N=profitsList.size()/3;
@@ -216,8 +310,17 @@ public class FileController {
         return ret.get(ret.size()-1);
     }
 
-
-
+    /**
+     * 回溯算法
+     * @param ret
+     * @param volume
+     * @param p
+     * @param w
+     * @param totalProfit
+     * @param totalWeight
+     * @param i
+     * @param j
+     */
     public void  recursion(ArrayList<Integer> ret,int volume,int[][] p,int[][] w,int totalProfit,int totalWeight,int i,int j){
         if(j!=3){
 //            相当于不选当前的项集
@@ -343,6 +446,12 @@ public class FileController {
         }
     }
 
+    /**
+     * 获取具体某组数据的容量
+     * @param fileName
+     * @param group
+     * @return
+     */
     @SneakyThrows
     private int volumeCount(String fileName, Integer group){
         //        所有数据文件的公共路径
@@ -367,4 +476,71 @@ public class FileController {
         }
         return volumes.get(group-1);
     }
+
+
+    /**
+     * 写文件
+     * @param file
+     * @param data
+     * @return
+     */
+    public String writeTxt(File file,String data){
+        Writer writer=null;
+        try {
+            writer = new OutputStreamWriter(new FileOutputStream(file), "UTF-8");
+//            写入内容
+            writer.write(data);
+            // 换行
+            writer.write("\r\n");
+            writer.close();
+            return "write success";
+        } catch (UnsupportedEncodingException e) {
+            e.printStackTrace();
+            return "write failed";
+        } catch (FileNotFoundException e) {
+            e.printStackTrace();
+            return "write failed";
+        } catch (IOException e) {
+            e.printStackTrace();
+            return "write failed";
+        }
+    }
+
+    /**
+     * 写文件为excel
+     * @param file
+     * @param answerUtil
+     * @return
+     */
+    public void writeExcel(File file,AnswerUtil answerUtil){
+        FileOutputStream fos = null;
+        try {
+            fos = new FileOutputStream(file);
+        } catch (FileNotFoundException e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+        }
+        //创建excel
+        Workbook workbook = new HSSFWorkbook();
+        //创建sheet--子工作表
+        Sheet sheet = workbook.createSheet("D{0-1}背包求解");
+        //获取子工作表的第一行<设置标题>
+        Row row = sheet.createRow(0);
+        row.createCell(0).setCellValue("最优解");
+        row.createCell(1).setCellValue("求解时间");
+        row.createCell(2).setCellValue("解向量");
+        row = sheet.createRow(1);
+        row.createCell(0).setCellValue(answerUtil.getAnswer());
+        row.createCell(1).setCellValue(answerUtil.getRunTime());
+        row.createCell(2).setCellValue(answerUtil.getBestPath());
+        try {
+            workbook.write(fos);
+            fos.flush();
+            fos.close();
+        } catch (IOException e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+        }
+    }
+
 }

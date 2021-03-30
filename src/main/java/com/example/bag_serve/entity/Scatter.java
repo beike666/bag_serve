@@ -22,4 +22,6 @@ public class Scatter {
     private Integer group;
 
     private Integer type;
+
+    private String fileType;
 }
