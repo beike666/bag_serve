@@ -1,6 +1,7 @@
 package com.example.bag_serve.controller;
 
 import com.alibaba.fastjson.JSONObject;
+
 import com.example.bag_serve.entity.Scatter;
 import com.example.bag_serve.util.OrderUtil;
 import com.example.bag_serve.util.ScatterUtil;
@@ -118,19 +119,28 @@ public class FileController {
         readFile(fileName,group,profitsList,weightsList);
 //        获取当前组的容量
         int volume=volumeCount(scatter.getFileName(),scatter.getGroup());
+        long startTime=0;
+        int answer=0;
+        long endTime=0;
         if(scatter.getType()==0){
 //            采用动态规划算法
-            long startTime=System.currentTimeMillis();   //获取开始时间
-            int answer=dp(profitsList,weightsList,volume);
-            long endTime=System.currentTimeMillis(); //获取结束时间
+            startTime=System.currentTimeMillis();   //获取开始时间
+            answer=dp(profitsList,weightsList,volume);
+            endTime=System.currentTimeMillis(); //获取结束时间
             jsonObject.put("status",200);
             jsonObject.put("answer",answer);
             jsonObject.put("runtime",endTime-startTime);
             return jsonObject;
         }else{
 //            采用回溯算法
+            startTime=System.currentTimeMillis();   //获取开始时间
+            answer=back(profitsList,weightsList,volume);
+            endTime=System.currentTimeMillis(); //获取结束时间
+            jsonObject.put("status",200);
+            jsonObject.put("answer",answer);
+            jsonObject.put("runtime",endTime-startTime);
+            return jsonObject;
         }
-        return jsonObject;
     }
 
     /**
@@ -144,15 +154,15 @@ public class FileController {
         int N=profitsList.size()/3;
 //        每一个项集的元素个数
         int S=3;
-        int[][] v = new int[N+1][S];        // 全部体积（每S个为一组）
-        int[][] w = new int[N+1][S];        // 价值（每S个为一组）
+        int[][] p = new int[N+1][S];        // 价值（每S个为一组）
+        int[][] w = new int[N+1][S];        // 重量（每S个为一组）
 //        将数据存为动态规划需要的格式
         int index=0;
         for (int i = 1; i <= N; i++) {
             List<Integer> pi = profitsList.subList(index, index + 3);
             int[] pa = pi.stream().mapToInt(Integer::intValue).toArray();
-            w[i]=pa;
-            List<Integer> wi = profitsList.subList(index, index + 3);
+            p[i]=pa;
+            List<Integer> wi = weightsList.subList(index, index + 3);
             int[] wa = wi.stream().mapToInt(Integer::intValue).toArray();
             w[i]=wa;
             index=index+3;
@@ -162,15 +172,73 @@ public class FileController {
         for (int i = 1; i <= N; i++) {
             for (int j = volume; j >= 0; j--) {
                 for (int k = 0; k < 3; k++) {
-                    if(j>=v[i][k]) {
-                        dp[j] = Math.max(dp[j], dp[j - v[i][k]] + w[i][k]);
+                    if(j>=w[i][k]) {
+                        dp[j] = Math.max(dp[j], dp[j - w[i][k]] + p[i][k]);
                     }
                 }
             }
         }
-        System.out.println(dp[volume]);
+
+
         return dp[volume];
 
+    }
+
+    private int back(ArrayList<Integer> profitsList, ArrayList<Integer> weightsList, int volume){
+        //        组数
+        int N=profitsList.size()/3;
+//        每一个项集的元素个数
+        int S=3;
+        int[][] p = new int[N+1][S];        // 价值（每S个为一组）
+        int[][] w = new int[N+1][S];        // 重量（每S个为一组）
+//        将数据存为动态规划需要的格式
+        int index=0;
+        for (int i = 0; i <= N; i++) {
+            if(i==0){
+                int[] head=new int[]{0,0,0};
+                p[i]=head;
+                w[i]=head;
+            }else{
+                List<Integer> pi = profitsList.subList(index, index + 3);
+                int[] pa = pi.stream().mapToInt(Integer::intValue).toArray();
+                p[i]=pa;
+                List<Integer> wi = weightsList.subList(index, index + 3);
+                int[] wa = wi.stream().mapToInt(Integer::intValue).toArray();
+                w[i]=wa;
+                index=index+3;
+            }
+        }
+        ArrayList<Integer> ret=new ArrayList<>();
+        int totalProfit=0;
+        int totalWeight=0;
+        recursion(ret,volume,p,w,totalProfit,totalWeight,0,0);
+        Collections.sort(ret);
+        return ret.get(ret.size()-1);
+    }
+
+
+
+    public void  recursion(ArrayList<Integer> ret,int volume,int[][] p,int[][] w,int totalProfit,int totalWeight,int i,int j){
+        if(j!=3){
+//            相当于不选当前的项集
+            totalProfit=totalProfit+p[i][j];
+            totalWeight=totalWeight+w[i][j];
+        }
+
+
+//        如果加上当前物品时总重量超过了背包容量则返回上一级
+        if(totalWeight>volume){
+            return;
+        }
+
+        if(i==p.length-1){
+            ret.add(totalProfit);
+            return;
+        }
+
+        for (int k = 0; k <4 ; k++) {
+            recursion(ret,volume,p,w,totalProfit,totalWeight,i+1,k);
+        }
     }
 
 
